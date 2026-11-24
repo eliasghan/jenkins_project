@@ -7,6 +7,9 @@ def run(String unixCmd, String winCmd) {
     }
 }
 
+// Windows path to the venv activation script (single quotes avoid GString escaping issues)
+WIN_ACTIVATE = 'venv\Scripts\activate.bat'
+
 pipeline {
     agent any
     environment {
@@ -20,7 +23,7 @@ pipeline {
                         run("python3 -m venv ${VIRTUAL_ENV}", "python -m venv ${VIRTUAL_ENV}")
                     }
                     run(". ${VIRTUAL_ENV}/bin/activate && pip install -r requirements.txt",
-                        "call ${VIRTUAL_ENV}\Scripts\activate.bat && python -m pip install -r requirements.txt")
+                        "call " + WIN_ACTIVATE + " && python -m pip install -r requirements.txt")
                 }
             }
         }
@@ -28,7 +31,7 @@ pipeline {
             steps {
                 script {
                     run(". ${VIRTUAL_ENV}/bin/activate && flake8 app.py",
-                        "call ${VIRTUAL_ENV}\Scripts\activate.bat && flake8 app.py")
+                        "call " + WIN_ACTIVATE + " && flake8 app.py")
                 }
             }
         }
@@ -36,7 +39,7 @@ pipeline {
             steps {
                 script {
                     run(". ${VIRTUAL_ENV}/bin/activate && pytest",
-                        "call ${VIRTUAL_ENV}\Scripts\activate.bat && pytest")
+                        "call " + WIN_ACTIVATE + " && pytest")
                 }
             }
         }
