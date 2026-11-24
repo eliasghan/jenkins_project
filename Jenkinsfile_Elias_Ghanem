@@ -10,6 +10,12 @@ def run(String unixCmd, String winCmd) {
 // Windows path to the venv activation script (single quotes avoid GString escaping issues)
 WIN_ACTIVATE = 'venv\\Scripts\\activate.bat'
 
+// Prefixes a command with venv activation for the current OS
+def venv(String cmd) {
+    run(". venv/bin/activate && " + cmd,
+        "call " + WIN_ACTIVATE + " && " + cmd)
+}
+
 pipeline {
     agent any
     environment {
@@ -22,32 +28,58 @@ pipeline {
                     if (!fileExists("${env.WORKSPACE}/${VIRTUAL_ENV}")) {
                         run("python3 -m venv ${VIRTUAL_ENV}", "python -m venv ${VIRTUAL_ENV}")
                     }
-                    run(". ${VIRTUAL_ENV}/bin/activate && pip install -r requirements.txt",
-                        "call " + WIN_ACTIVATE + " && python -m pip install -r requirements.txt")
+                    venv("python -m pip install -r requirements.txt")
                 }
             }
         }
         stage('Lint') {
             steps {
                 script {
-                    run(". ${VIRTUAL_ENV}/bin/activate && flake8 app.py",
-                        "call " + WIN_ACTIVATE + " && flake8 app.py")
+                    venv("flake8 app.py deploy.py")
                 }
             }
         }
         stage('Test') {
             steps {
                 script {
-                    run(". ${VIRTUAL_ENV}/bin/activate && pytest",
-                        "call " + WIN_ACTIVATE + " && pytest")
+                    venv("pytest")
+                }
+            }
+        }
+        stage('Coverage') {
+            steps {
+                script {
+                    venv("coverage run -m pytest")
+                    venv("coverage report -m --fail-under=80")
+                    venv("coverage html")
+                    venv("coverage xml")
+                }
+            }
+            post {
+                always {
+                    archiveArtifacts artifacts: 'htmlcov/**, coverage.xml', allowEmptyArchive: true
+                }
+            }
+        }
+        stage('Security Scan') {
+            steps {
+                script {
+                    // Report file for archiving, then fail the build on medium+ severity issues
+                    venv("bandit -r . -x ./venv,./tests -f json -o bandit-report.json --exit-zero")
+                    venv("bandit -r . -x ./venv,./tests -ll")
+                }
+            }
+            post {
+                always {
+                    archiveArtifacts artifacts: 'bandit-report.json', allowEmptyArchive: true
                 }
             }
         }
         stage('Deploy') {
             steps {
                 script {
-                    // Deployment logic, e.g., pushing to a remote server
                     echo "Deploying application..."
+                    venv("python deploy.py")
                 }
             }
         }
